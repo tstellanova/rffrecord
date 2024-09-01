@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Record GNSS data from a particular band/code
-using HackRF SDR, and output in sigmf format
+using HackRF SDR, and output in SigMF format
 """
 from subprocess import Popen, PIPE, STDOUT
 import re
@@ -82,6 +82,9 @@ def freq_ctr_and_bw(bandcode):
         case 'V1':
             # simulate receving a "virtual" white noise signal on the L1 band
             return 1575.4200, 24.0, 10.0, 10.0
+        case 'RCM':
+            # receive from the Radarsat Constellation (RCM) or similar
+            return 5405.0000, 25.0, 25.0, 25.0
         case 'KALX' | _:
             return 90.7000, 5.000, 2.0, 0.2 # KALX.berkeley.edu
 
@@ -116,7 +119,7 @@ def main():
                                  'L1CA','L1M', 'L2C', 'L2CM', 'L5I',
                                  'B2a', 'B2c', 'B3',
                                  'E1', 'E5a', 'E5b', 'E6',
-                                 'H1','KALX', 'V1'
+                                 'H1','KALX', 'V1', 'RCM',
                                  ],
                         help='Short code string for the GNSS band selected (default: L1)')
     parser.add_argument('--duration', '-d',  type=int, default=30,
@@ -155,11 +158,12 @@ def main():
     freq_upper_edge = int(ctr_freq_hz + half_baseband_bandwidth)
     # figure out where to put the output files automatically
     file_number = 1
-    data_out_path = f'hrf_gnss_{bandcode}_{duration_seconds}s_{file_number:04d}.sigmf-data'
+    path_stem = f'hrf_gnss_{bandcode}_{duration_seconds}s'
+    data_out_path = f'{path_stem}_{file_number:04d}.sigmf-data'
     while os.path.isfile(data_out_path):
         file_number += 1
-        data_out_path = f'hrf_gnss_{bandcode}_{duration_seconds}s_{file_number:04d}.sigmf-data'
-    meta_out_path = f'hrf_gnss_{bandcode}_{duration_seconds}s_{file_number:04d}.sigmf-meta'
+        data_out_path = f'{path_stem}_{file_number:04d}.sigmf-data'
+    meta_out_path = f'{path_stem}_{file_number:04d}.sigmf-meta'
 
     # sample SN: 0000000000000000c66c63dc2d898983
     opt_str = f"-f {ctr_freq_hz} -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B -r {data_out_path}"
@@ -205,8 +209,9 @@ def main():
         total_power = -1.0
         step_count = 1
 
-    # rc = proc.returncode
-    # print(f"hackrf_transfer finished with rc: {rc}")
+    rc = proc.returncode
+    if 0 != rc:
+        print(f"hackrf_transfer failed with result code: {rc}")
 
     avg_power = total_power / float(step_count)
     print(f"avg_power: {avg_power:02.3f} (dBFS)")

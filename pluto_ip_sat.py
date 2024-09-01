@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
 Record RF baseband from a particular band/code
-using an IP-connected Pluto SDR, and output in SigMF format
+using an IP-connected Pluto SDR, via SatDump,
+and output in SigMF format
 """
 from subprocess import Popen, PIPE, STDOUT
 import re
@@ -103,8 +104,7 @@ def main():
                         default='/Applications/SatDump.app/Contents/MacOS/satdump',
                         help="System path where the satdump binary is found")
     parser.add_argument("--out_path",dest='out_path',default='./',
-                        help="Directory path to place output files"
-                        )
+                        help="Directory path to place output files" )
     parser.add_argument('--duration', '-d',  type=int, default=10,
                         help='Duration to capture, in seconds')
 
