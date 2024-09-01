@@ -21,9 +21,9 @@ def main():
                         help='Duration to capture, in seconds')
     parser.add_argument('--serial_num', '-sn',   default=None,
                         help='Specific HackRF serial number to use')
-    parser.add_argument('--center_freq_mhz', '-fc', dest='fc_mhz', type=float, default=430.500,
+    parser.add_argument('--center_freq_mhz', '-fc', dest='fc_mhz', type=float, default=5405.5000,
                         help='Center frequency to record, in MHz')
-    parser.add_argument("--out_path",dest='out_path',default='./',
+    parser.add_argument("--out_path",dest='out_path',default='./data/',
                         help="Directory path to place output files" )
 
     args = parser.parse_args()
@@ -46,7 +46,7 @@ def main():
     # TODO determine whether bb filter bw > sampling bw is more optimal for SAR
     baseband_filter_bw_hz = sample_rate_hz
 
-    # These are somewhat arbitrary, based on testing with a UHF yagi antenna
+    # These are based on testing with some antenna and LNA combos -- YMMV
     if_lna_gain_db, baseband_gain_db = 32, 16
 
     n_samples = int(duration_seconds * sample_rate_hz)
@@ -66,7 +66,7 @@ def main():
     meta_out_path = f'{path_stem}_{file_number:04d}.sigmf-meta'
 
     # assumes that HackrF software version is new enough to support `-B` power reporting flag
-    opt_str = f"-f {ctr_freq_hz} -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B -r {data_out_path}"
+    opt_str = f"-f {ctr_freq_hz} -a 0 -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B -r {data_out_path}"
     if specific_hrf_sn is None:
         cmd_str = f"hackrf_transfer {opt_str}"
     else:
@@ -105,6 +105,9 @@ def main():
     rc = proc.returncode
     if 0 != rc:
         print(f"hackrf_transfer failed with result code: {rc}")
+    else:
+        avg_power = total_power / float(step_count)
+        print(f"avg_power: {avg_power:02.3f} (dBFS)")
 
 
     # TODO look at using the SigMFFile object, directly, instead
