@@ -193,15 +193,15 @@ def main():
         "global": {
             SigMFFile.DATATYPE_KEY: 'ci16_le',
             SigMFFile.SAMPLE_RATE_KEY: int(f'{sample_rate_hz}'),
-            SigMFFile.HW_KEY: "PlutoPlus SDR, bias tee, LNA",
+            SigMFFile.HW_KEY: "PlutoPlus SDR, dual cascaded 20 dB 5GHz LNA",
             SigMFFile.AUTHOR_KEY: 'Todd Stellanova',
             SigMFFile.VERSION_KEY: f'{sigmf.__version__}',
             SigMFFile.DESCRIPTION_KEY: f'Band {bandcode} recorded using satdump',
             SigMFFile.RECORDER_KEY: 'satdump',
             'antenna:type': 'Wideband',
             'stellanovat:sdr': 'PlutoPlus',
-            'stellanovat:LNA': 'Unknown',
-            'stellanovat:LNA_pwr': 'bias_tee',
+            'stellanovat:LNA': 'cascaded 20dB, 5 GHz filter',
+            'stellanovat:LNA_pwr': 'usb-c',
             'stellanovat:boost_amp': 'None',
         },
         "captures": [
