@@ -64,7 +64,7 @@ def freq_ctr_and_bw(bandcode):
             # Record the Hydrogen Line
             return 1420.4000, 12.000, 2.0, 2.0
         case 'RCM':
-            # Record on the Radarsat Constellation (RCM-1, RCM-2, RCM-3, Radarsat-2)
+            # Record on the Radarsat Constellation (RCM-1, RCM-2, RCM-3, Radarsat-2, or Sentinel 1-A)
             return 5405.000, 100.00, 25.0, 25.0
         case 'L1':
             # adequate for most L1 GPS uses
@@ -90,7 +90,7 @@ def freq_ctr_and_bw(bandcode):
 
 def main():
     parser = argparse.ArgumentParser(description='Grab some baseband RF data using a remote Pluto SDR over IP')
-    parser.add_argument('--band', '-b', dest='bandcode', default='L1',
+    parser.add_argument('--band', '-b', dest='bandcode', default='RCM',
                         choices=['L1', 'L2', 'L3', 'L4', 'L5',
                                  'L1CA','L1M', 'L2C', 'L2CM', 'L5I',
                                  'B2a', 'B2c', 'B3',
@@ -98,7 +98,7 @@ def main():
                                  'H1','KALX', 'V1', 'RCM'
                                  ],
                         help='Short code string for the band selected (default: L1)')
-    parser.add_argument('--ip_address','-ip', dest='ip_address',required=True,
+    parser.add_argument('--ip_address','-ip', dest='ip_address', default='pluto.local',
                         help='IP address of the Pluto to connect with')
     parser.add_argument('--satdump_bin_path',dest='satdump_bin_path',
                         default='/Applications/SatDump.app/Contents/MacOS/satdump',
