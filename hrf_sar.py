@@ -66,7 +66,7 @@ def main():
     meta_out_path = f'{path_stem}_{file_number:04d}.sigmf-meta'
 
     # assumes that HackrF software version is new enough to support `-B` power reporting flag
-    opt_str = f"-f {ctr_freq_hz} -a 0 -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B -r {data_out_path}"
+    opt_str = f"-f {ctr_freq_hz} -a 1 -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B -r {data_out_path}"
     if specific_hrf_sn is None:
         cmd_str = f"hackrf_transfer {opt_str}"
     else:
