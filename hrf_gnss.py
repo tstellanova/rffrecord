@@ -263,6 +263,9 @@ def main():
     with open(meta_out_path, "w") as meta_outfile:
         meta_outfile.write(meta_json)
 
+    print(f"wrote {meta_out_path}")
+
+
 
 if __name__ == "__main__":
     main()
