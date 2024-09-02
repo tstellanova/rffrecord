@@ -47,7 +47,7 @@ def main():
     baseband_filter_bw_hz = sample_rate_hz
 
     # These are based on testing with some antenna and LNA combos -- YMMV
-    if_lna_gain_db, baseband_gain_db = 32, 16
+    if_lna_gain_db, baseband_gain_db = 40, 20
 
     n_samples = int(duration_seconds * sample_rate_hz)
 
