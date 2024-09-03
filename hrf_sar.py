@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Record SAR data at full bandwidth
+Continuously SAR data at full bandwidth
 using HackRF SDR, and output in SigMF format
 """
 from subprocess import Popen, PIPE, STDOUT
@@ -15,6 +15,65 @@ import sigmf
 from sigmf import SigMFFile
 
 
+def capture_one_data_segment(cmd_str_stem=None, path_stem=None):
+    # figure out where to put the output files automatically
+    date_time_str = datetime.utcnow().isoformat(sep='_',timespec='seconds')+'Z'
+    print(f"date_time_str {date_time_str}")
+
+    full_path_stem = f'{path_stem}_{date_time_str}'
+    data_out_path = f'{full_path_stem}.sigmf-data'
+
+    # assumes that HackrF software version supports `-B` power reporting flag
+    cmd_str = f"{cmd_str_stem} -r {data_out_path}"
+    # opt_str = f"-f {ctr_freq_hz} -a 1 -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B -r {data_out_path}"
+    # if specific_hrf_sn is None:
+    #     cmd_str = f"hackrf_transfer {opt_str}"
+    # else:
+    #     cmd_str = f"hackrf_transfer -d {specific_hrf_sn} {opt_str}"
+
+    print(f"START:\n{cmd_str} ")
+
+    # Regex to match and extract numeric values
+    regex = r"[-+]?\d*\.\d+|\d+"
+
+    total_power = float(0)
+    avg_power = float(0)
+    max_power = float(-200)
+    step_count = 0
+    line_count = 0
+    capture_start_utc = None
+
+    with (Popen([cmd_str], stdout=PIPE, stderr=STDOUT, text=True, shell=True) as proc):
+        for line in proc.stdout:
+            if line_count > 6: # skip command startup lines
+                if capture_start_utc is None:
+                    capture_start_utc = datetime.utcnow().isoformat()+'Z'
+
+                numeric_values = re.findall(regex, line)
+                if numeric_values is not None and len(numeric_values) == 7:
+                    # 8.1 MiB / 1.000 sec =  8.1 MiB/second, average power -2.0 dBfs, 14272 bytes free in buffer, 0 overruns, longest 0 bytes
+                    # ['8.1', '1.000', '8.1', '-2.0', '14272', '0', '0']
+                    print(numeric_values)
+                    step_power = float(numeric_values[3])
+                    if step_power > max_power:
+                        max_power = step_power
+                    total_power += step_power
+                    step_count += 1
+                else:
+                    # read all the stdout until finished, else data out files are not flushed
+                    continue
+            line_count += 1
+
+    rc = proc.returncode
+    if 0 != rc:
+        print(f"hackrf_transfer failed with result code: {rc}")
+    else:
+        avg_power = total_power / float(step_count)
+        print(f"max_power: {max_power:02.3f} avg_power: {avg_power:02.3f} (dBFS)")
+
+    return max_power, avg_power, full_path_stem
+
+
 def main():
     parser = argparse.ArgumentParser(description='Grab some SAR data using hackrf_transfer')
     parser.add_argument('--duration', '-d',  type=int, default=15,
@@ -25,12 +84,14 @@ def main():
                         help='Center frequency to record, in MHz')
     parser.add_argument("--out_path",dest='out_path',default='./data/',
                         help="Directory path to place output files" )
-
+    parser.add_argument('--squelch_dbfs', dest='squelch_dbfs', type=float, default=-200.0,
+                        help="In nonstop mode, the minimum recorded power to keep")
     args = parser.parse_args()
     duration_seconds = args.duration
     specific_hrf_sn = args.serial_num
     freq_ctr_mhz = args.fc_mhz
     out_path = args.out_path
+    squelch_power_threshold = args.squelch_dbfs
 
     if not os.path.isdir(out_path):
         print(f"out_path {out_path} does not exist")
@@ -56,104 +117,119 @@ def main():
     freq_lower_edge = int(ctr_freq_hz - half_baseband_bandwidth)
     freq_upper_edge = int(ctr_freq_hz + half_baseband_bandwidth)
 
-    # figure out where to put the output files automatically
-    file_number = 1
-    path_stem = f'{out_path}hrf_sar_{ctr_freq_hz}_{duration_seconds}s'
-    data_out_path = f'{path_stem}_{file_number:04d}.sigmf-data'
-    while os.path.isfile(data_out_path):
-        file_number += 1
-        data_out_path = f'{path_stem}_{file_number:04d}.sigmf-data'
-    meta_out_path = f'{path_stem}_{file_number:04d}.sigmf-meta'
+    path_stem = f'{out_path}hrf_sar_{int(freq_ctr_mhz)}_{duration_seconds}s'
 
-    # assumes that HackrF software version is new enough to support `-B` power reporting flag
-    opt_str = f"-f {ctr_freq_hz} -a 1 -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B -r {data_out_path}"
+    # assumes that HackrF software version supports `-B` power reporting flag
+    opt_str = f"-f {ctr_freq_hz} -a 1 -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B "
     if specific_hrf_sn is None:
-        cmd_str = f"hackrf_transfer {opt_str}"
+        cmd_str_stem = f"hackrf_transfer {opt_str}"
     else:
-        cmd_str = f"hackrf_transfer -d {specific_hrf_sn} {opt_str}"
+        cmd_str_stem = f"hackrf_transfer -d {specific_hrf_sn} {opt_str}"
 
-    print(f"START:\n{cmd_str} ")
-
-    # Regex to match and extract numeric values
-    regex = r"[-+]?\d*\.\d+|\d+"
-
-    total_power = float(0)
-    step_count = 0
-    line_count = 0
-    capture_start_utc = None
-
-    with (Popen([cmd_str], stdout=PIPE, stderr=STDOUT, text=True, shell=True) as proc):
-        for line in proc.stdout:
-            if line_count > 6: # skip command startup lines
-                if capture_start_utc is None:
-                    capture_start_utc = datetime.utcnow().isoformat()+'Z'
-
-                numeric_values = re.findall(regex, line)
-                if numeric_values is not None and len(numeric_values) == 7:
-                    # 8.1 MiB / 1.000 sec =  8.1 MiB/second, average power -2.0 dBfs, 14272 bytes free in buffer, 0 overruns, longest 0 bytes
-                    # ['8.1', '1.000', '8.1', '-2.0', '14272', '0', '0']
-                    print(numeric_values)
-                    step_power = numeric_values[3]
-                    total_power += float(step_power)
-                    step_count += 1
-                else:
-                    # read all the stdout until finished, else data out files are not flushed
-                    continue
-            line_count += 1
-
-
-    rc = proc.returncode
-    if 0 != rc:
-        print(f"hackrf_transfer failed with result code: {rc}")
-    else:
-        avg_power = total_power / float(step_count)
-        print(f"avg_power: {avg_power:02.3f} (dBFS)")
-
+    basic_capture_start_utc = datetime.utcnow().isoformat()+'Z'
 
     # TODO look at using the SigMFFile object, directly, instead
     meta_info_dict = {
-    "global": {
-        SigMFFile.DATATYPE_KEY: 'ci8',
-        SigMFFile.SAMPLE_RATE_KEY: int(f'{sample_rate_hz}'),
-        SigMFFile.HW_KEY: "HackRF, LNA, antenna",
-        SigMFFile.AUTHOR_KEY: 'Todd Stellanova',
-        SigMFFile.VERSION_KEY: f'{sigmf.__version__}', 
-        SigMFFile.DESCRIPTION_KEY: f'SAR recorded using hackrf_transfer',
-        SigMFFile.RECORDER_KEY: 'hackrf_transfer',
-        'antenna:type': 'Wideband',
-        'stellanovat:sdr': 'HackRF',
-        'stellanovat:sdr_sn': f'{specific_hrf_sn}',
-        'stellanovat:LNA': '6GHz 20dB',
-        'stellanovat:LNA_pwr': 'USB-C',
-    },
-    "captures": [
-        {
-            SigMFFile.START_INDEX_KEY: 0,
-            SigMFFile.FREQUENCY_KEY: int(f'{ctr_freq_hz}'), 
-            SigMFFile.DATETIME_KEY: f'{capture_start_utc}',
-            'stellanovat:if_gain_db': int(f'{if_lna_gain_db}'),
-            'stellanovat:bb_gain_db': int(f'{baseband_gain_db}'),
-            'stellanovat:sdr_rx_amp_enabled': 0,
-            "stellanovat:recorder_command": f'{cmd_str}',
-        }
-    ],
-    "annotations": [
-        {
-            SigMFFile.START_INDEX_KEY: 0,
-            SigMFFile.LENGTH_INDEX_KEY: int(f'{n_samples}'),
-            SigMFFile.FHI_KEY: int(f'{freq_upper_edge}'),
-            SigMFFile.FLO_KEY: int(f'{freq_lower_edge}'),
-            SigMFFile.LABEL_KEY: f'SAR',
-        }
-    ]
+        "global": {
+            SigMFFile.DATATYPE_KEY: 'ci8',
+            SigMFFile.SAMPLE_RATE_KEY: int(f'{sample_rate_hz}'),
+            SigMFFile.HW_KEY: "HackRF, LNA, antenna",
+            SigMFFile.AUTHOR_KEY: 'Todd Stellanova',
+            SigMFFile.VERSION_KEY: f'{sigmf.__version__}',
+            SigMFFile.DESCRIPTION_KEY: f'SAR recorded using hackrf_transfer',
+            SigMFFile.RECORDER_KEY: 'hackrf_transfer',
+            'antenna:type': 'Wideband',
+            'stellanovat:sdr': 'HackRF',
+            'stellanovat:sdr_sn': f'{specific_hrf_sn}',
+            'stellanovat:LNA': '6GHz 20dB',
+            'stellanovat:LNA_pwr': 'bias-tee',
+        },
+        "captures": [
+            {
+                SigMFFile.START_INDEX_KEY: 0,
+                SigMFFile.FREQUENCY_KEY: int(f'{ctr_freq_hz}'),
+                SigMFFile.DATETIME_KEY: f'{basic_capture_start_utc}', # replace later
+                'stellanovat:if_gain_db': int(f'{if_lna_gain_db}'),
+                'stellanovat:bb_gain_db': int(f'{baseband_gain_db}'),
+                'stellanovat:sdr_rx_amp_enabled': 0,
+                "stellanovat:recorder_command": f'{cmd_str_stem}',
+                "stellanovat:max_power_dbfs": 0
+            }
+        ],
+        "annotations": [
+            {
+                SigMFFile.START_INDEX_KEY: 0,
+                SigMFFile.LENGTH_INDEX_KEY: int(f'{n_samples}'),
+                SigMFFile.FHI_KEY: int(f'{freq_upper_edge}'),
+                SigMFFile.FLO_KEY: int(f'{freq_lower_edge}'),
+                SigMFFile.LABEL_KEY: f'SAR',
+            }
+        ]
     }
 
-    meta_json = json.dumps(meta_info_dict, indent=2)
+    while True:
+        seg_start_time_utc = datetime.utcnow().isoformat()+'Z'
+        max_power, avg_power, full_path_stem = capture_one_data_segment(cmd_str_stem, path_stem)
+        if max_power > squelch_power_threshold:
+            meta_info_dict["captures"][0][SigMFFile.DATETIME_KEY] = seg_start_time_utc
+            meta_info_dict["captures"][0]["stellanovat:max_power_dbfs"] = max_power
+            meta_out_path = f'{full_path_stem}.sigmf-meta'
+            meta_json = json.dumps(meta_info_dict, indent=2)
 
-    with open(meta_out_path, "w") as meta_outfile:
-        meta_outfile.write(meta_json)
+            with open(meta_out_path, "w") as meta_outfile:
+                meta_outfile.write(meta_json)
+            print(f"wrote {meta_out_path}")
+        else:
+            # remove the data file that did not meet squelch standard
+            data_out_path = f'{full_path_stem}.sigmf-data'
+            print(f"deleting {data_out_path}...")
+            os.remove(data_out_path)
 
-    print(f"wrote {meta_out_path}")
+
+
+
+
+    # print(f"START:\n{cmd_str_stem} ")
+    #
+    # # Regex to match and extract numeric values
+    # regex = r"[-+]?\d*\.\d+|\d+"
+    #
+    # total_power = float(0)
+    # step_count = 0
+    # line_count = 0
+    # capture_start_utc = None
+    #
+    # max_power = -200.
+    # with (Popen([cmd_str_stem], stdout=PIPE, stderr=STDOUT, text=True, shell=True) as proc):
+    #     for line in proc.stdout:
+    #         if line_count > 6: # skip command startup lines
+    #             if capture_start_utc is None:
+    #                 capture_start_utc = datetime.utcnow().isoformat()+'Z'
+    #
+    #             numeric_values = re.findall(regex, line)
+    #             if numeric_values is not None and len(numeric_values) == 7:
+    #                 # 8.1 MiB / 1.000 sec =  8.1 MiB/second, average power -2.0 dBfs, 14272 bytes free in buffer, 0 overruns, longest 0 bytes
+    #                 # ['8.1', '1.000', '8.1', '-2.0', '14272', '0', '0']
+    #                 print(numeric_values)
+    #                 step_power = numeric_values[3]
+    #                 if step_power > max_power:
+    #                     max_power = step_power
+    #                 total_power += float(step_power)
+    #                 step_count += 1
+    #             else:
+    #                 # read all the stdout until finished, else data out files are not flushed
+    #                 continue
+    #         line_count += 1
+    #
+    # rc = proc.returncode
+    # if 0 != rc:
+    #     print(f"hackrf_transfer failed with result code: {rc}")
+    #     return -1  # exit as it's unlikely we can continue when hackrf_transfer is failing
+    # else:
+    #     avg_power = total_power / float(step_count)
+    #     print(f"max_power: {max_power:02.3f} avg_power: {avg_power:02.3f} (dBFS)")
+
+
 
 
 
