@@ -84,7 +84,7 @@ def main():
                         help='Center frequency to record, in MHz')
     parser.add_argument("--out_path",dest='out_path',default='./data/',
                         help="Directory path to place output files" )
-    parser.add_argument('--squelch_dbfs', dest='squelch_dbfs', type=float, default=-200.0,
+    parser.add_argument('--squelch_dbfs', dest='squelch_dbfs', type=float, default=-31.0,
                         help="In nonstop mode, the minimum recorded power to keep")
     args = parser.parse_args()
     duration_seconds = args.duration
@@ -170,6 +170,7 @@ def main():
     while True:
         seg_start_time_utc = datetime.utcnow().isoformat()+'Z'
         max_power, avg_power, full_path_stem = capture_one_data_segment(cmd_str_stem, path_stem)
+        print(f"max_power {max_power} > squelch {squelch_power_threshold} ?")
         if max_power > squelch_power_threshold:
             meta_info_dict["captures"][0][SigMFFile.DATETIME_KEY] = seg_start_time_utc
             meta_info_dict["captures"][0]["stellanovat:max_power_dbfs"] = max_power
@@ -184,52 +185,6 @@ def main():
             data_out_path = f'{full_path_stem}.sigmf-data'
             print(f"deleting {data_out_path}...")
             os.remove(data_out_path)
-
-
-
-
-
-    # print(f"START:\n{cmd_str_stem} ")
-    #
-    # # Regex to match and extract numeric values
-    # regex = r"[-+]?\d*\.\d+|\d+"
-    #
-    # total_power = float(0)
-    # step_count = 0
-    # line_count = 0
-    # capture_start_utc = None
-    #
-    # max_power = -200.
-    # with (Popen([cmd_str_stem], stdout=PIPE, stderr=STDOUT, text=True, shell=True) as proc):
-    #     for line in proc.stdout:
-    #         if line_count > 6: # skip command startup lines
-    #             if capture_start_utc is None:
-    #                 capture_start_utc = datetime.utcnow().isoformat()+'Z'
-    #
-    #             numeric_values = re.findall(regex, line)
-    #             if numeric_values is not None and len(numeric_values) == 7:
-    #                 # 8.1 MiB / 1.000 sec =  8.1 MiB/second, average power -2.0 dBfs, 14272 bytes free in buffer, 0 overruns, longest 0 bytes
-    #                 # ['8.1', '1.000', '8.1', '-2.0', '14272', '0', '0']
-    #                 print(numeric_values)
-    #                 step_power = numeric_values[3]
-    #                 if step_power > max_power:
-    #                     max_power = step_power
-    #                 total_power += float(step_power)
-    #                 step_count += 1
-    #             else:
-    #                 # read all the stdout until finished, else data out files are not flushed
-    #                 continue
-    #         line_count += 1
-    #
-    # rc = proc.returncode
-    # if 0 != rc:
-    #     print(f"hackrf_transfer failed with result code: {rc}")
-    #     return -1  # exit as it's unlikely we can continue when hackrf_transfer is failing
-    # else:
-    #     avg_power = total_power / float(step_count)
-    #     print(f"max_power: {max_power:02.3f} avg_power: {avg_power:02.3f} (dBFS)")
-
-
 
 
 
