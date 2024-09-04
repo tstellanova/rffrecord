@@ -174,7 +174,7 @@ def main():
         full_filename_stem = f'{base_filename_stem}_{compact_datetime_str}'
         # first we will write data to a temporary complex (I/Q) signed byte file
         tmp_data_file_path = f'{tmp_path}{full_filename_stem}.cs8'
-        max_power, avg_power, full_path_stem = capture_one_data_segment(cmd_str_stem, tmp_data_file_path)
+        max_power, avg_power = capture_one_data_segment(cmd_str_stem, tmp_data_file_path)
 
         print(f"max_power {max_power} > squelch {squelch_power_threshold} ?")
         if max_power >= squelch_power_threshold:
