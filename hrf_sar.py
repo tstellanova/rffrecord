@@ -15,21 +15,10 @@ import sigmf
 from sigmf import SigMFFile
 
 
-def capture_one_data_segment(cmd_str_stem=None, path_stem=None):
-    # figure out where to put the output files automatically
-    date_time_str = datetime.utcnow().isoformat(sep='_',timespec='seconds')+'Z'
-    print(f"date_time_str {date_time_str}")
-
-    full_path_stem = f'{path_stem}_{date_time_str}'
-    data_out_path = f'{full_path_stem}.sigmf-data'
+def capture_one_data_segment(cmd_str_stem=None, data_out_path=None):
 
     # assumes that HackrF software version supports `-B` power reporting flag
     cmd_str = f"{cmd_str_stem} -r {data_out_path}"
-    # opt_str = f"-f {ctr_freq_hz} -a 1 -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B -r {data_out_path}"
-    # if specific_hrf_sn is None:
-    #     cmd_str = f"hackrf_transfer {opt_str}"
-    # else:
-    #     cmd_str = f"hackrf_transfer -d {specific_hrf_sn} {opt_str}"
 
     print(f"START:\n{cmd_str} ")
 
@@ -71,7 +60,7 @@ def capture_one_data_segment(cmd_str_stem=None, path_stem=None):
         avg_power = total_power / float(step_count)
         print(f"max_power: {max_power:02.3f} avg_power: {avg_power:02.3f} (dBFS)")
 
-    return max_power, avg_power, full_path_stem
+    return max_power, avg_power
 
 
 def main():
@@ -82,6 +71,8 @@ def main():
                         help='Specific HackRF serial number to use')
     parser.add_argument('--center_freq_mhz', '-fc', dest='fc_mhz', type=float, default=5405.5000,
                         help='Center frequency to record, in MHz')
+    parser.add_argument("--tmp_path",dest='tmp_path', default=None,
+                        help="Directory path to place temporary files (e.g. a ramdisk)" )
     parser.add_argument("--out_path",dest='out_path',default='./data/',
                         help="Directory path to place output files" )
     parser.add_argument('--squelch_dbfs', dest='squelch_dbfs', type=float, default=-31.0,
@@ -91,10 +82,17 @@ def main():
     specific_hrf_sn = args.serial_num
     freq_ctr_mhz = args.fc_mhz
     out_path = args.out_path
+    tmp_path = out_path
+    if args.tmp_path is not None:
+        tmp_path = args.tmp_path
     squelch_power_threshold = args.squelch_dbfs
 
     if not os.path.isdir(out_path):
         print(f"out_path {out_path} does not exist")
+        return -1
+
+    if not os.path.isdir(tmp_path):
+        print(f"tmp_path {tmp_path} does not exist")
         return -1
 
     sampling_bw_mhz = 20.0 # full bandwidth of HackRF
@@ -117,7 +115,9 @@ def main():
     freq_lower_edge = int(ctr_freq_hz - half_baseband_bandwidth)
     freq_upper_edge = int(ctr_freq_hz + half_baseband_bandwidth)
 
-    path_stem = f'{out_path}hrf_sar_{int(freq_ctr_mhz)}_{duration_seconds}s'
+    base_filename_stem = f'hrf_sar_{int(freq_ctr_mhz)}_{duration_seconds}s'
+    # tmp_data_file_path = f'{tmp_path}{base_filename_stem}'
+    # path_stem = f'{out_path}hrf_sar_{int(freq_ctr_mhz)}_{duration_seconds}s'
 
     # assumes that HackrF software version supports `-B` power reporting flag
     opt_str = f"-f {ctr_freq_hz} -a 1 -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B "
@@ -168,23 +168,33 @@ def main():
     }
 
     while True:
-        seg_start_time_utc = datetime.utcnow().isoformat()+'Z'
-        max_power, avg_power, full_path_stem = capture_one_data_segment(cmd_str_stem, path_stem)
+        le_datetime = datetime.utcnow()
+        seg_start_time_utc = le_datetime.isoformat()+'Z'
+        compact_datetime_str = le_datetime.isoformat(sep='_',timespec='seconds')+'Z'
+        full_filename_stem = f'{base_filename_stem}_{compact_datetime_str}'
+        # first we will write data to a temporary complex (I/Q) signed byte file
+        tmp_data_file_path = f'{tmp_path}{full_filename_stem}.cs8'
+        max_power, avg_power, full_path_stem = capture_one_data_segment(cmd_str_stem, tmp_data_file_path)
+
         print(f"max_power {max_power} > squelch {squelch_power_threshold} ?")
-        if max_power > squelch_power_threshold:
+        if max_power >= squelch_power_threshold:
+            # move the tmp data file to a more permanent location
+            solid_data_file_path = f'{out_path}{full_filename_stem}.sigmf-data'
+            print(f"moving {tmp_data_file_path} to {solid_data_file_path} ...")
+            os.rename(tmp_data_file_path, solid_data_file_path)
+            # create a meta file for the data
             meta_info_dict["captures"][0][SigMFFile.DATETIME_KEY] = seg_start_time_utc
             meta_info_dict["captures"][0]["stellanovat:max_power_dbfs"] = max_power
-            meta_out_path = f'{full_path_stem}.sigmf-meta'
+            meta_out_path = f'{out_path}{full_filename_stem}.sigmf-data'
             meta_json = json.dumps(meta_info_dict, indent=2)
 
             with open(meta_out_path, "w") as meta_outfile:
                 meta_outfile.write(meta_json)
-            print(f"wrote {meta_out_path}")
+            print(f"wrote:\n{meta_out_path}")
         else:
             # remove the data file that did not meet squelch standard
-            data_out_path = f'{full_path_stem}.sigmf-data'
-            print(f"deleting {data_out_path}...")
-            os.remove(data_out_path)
+            print(f"deleting {tmp_data_file_path} ...")
+            os.remove(tmp_data_file_path)
 
 
 
