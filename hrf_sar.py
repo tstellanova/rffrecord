@@ -191,7 +191,7 @@ def main():
             # create a meta file for the data
             meta_info_dict["captures"][0][SigMFFile.DATETIME_KEY] = seg_start_time_utc
             meta_info_dict["captures"][0]["stellanovat:max_power_dbfs"] = max_power
-            meta_out_path = f'{out_path}{full_filename_stem}.sigmf-data'
+            meta_out_path = f'{out_path}{full_filename_stem}.sigmf-meta'
             meta_json = json.dumps(meta_info_dict, indent=2)
 
             with open(meta_out_path, "w") as meta_outfile:
