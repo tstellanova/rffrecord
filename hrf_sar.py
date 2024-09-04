@@ -185,8 +185,8 @@ def main():
             if tmp_path == out_path:
                 os.rename(tmp_data_file_path, solid_data_file_path)
             else:
-                shutil.copy(tmp_data_file_path, solid_data_file_path)
-                os.remove(tmp_data_file_path)
+                # this method takes care of deleting the tmp file
+                shutil.move(tmp_data_file_path, solid_data_file_path)
 
             # create a meta file for the data
             meta_info_dict["captures"][0][SigMFFile.DATETIME_KEY] = seg_start_time_utc
