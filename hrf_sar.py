@@ -7,6 +7,7 @@ from subprocess import Popen, PIPE, STDOUT
 import re
 import argparse
 import os
+import shutil
 import json
 from datetime import datetime, timezone
 
@@ -178,10 +179,15 @@ def main():
 
         print(f"max_power {max_power} > squelch {squelch_power_threshold} ?")
         if max_power >= squelch_power_threshold:
-            # move the tmp data file to a more permanent location
+            # move the tmp data file to a more persistent location
             solid_data_file_path = f'{out_path}{full_filename_stem}.sigmf-data'
             print(f"moving {tmp_data_file_path} to {solid_data_file_path} ...")
-            os.rename(tmp_data_file_path, solid_data_file_path)
+            if tmp_path == out_path:
+                os.rename(tmp_data_file_path, solid_data_file_path)
+            else:
+                shutil.copy(tmp_data_file_path, solid_data_file_path)
+                os.remove(tmp_data_file_path)
+
             # create a meta file for the data
             meta_info_dict["captures"][0][SigMFFile.DATETIME_KEY] = seg_start_time_utc
             meta_info_dict["captures"][0]["stellanovat:max_power_dbfs"] = max_power
