@@ -74,9 +74,9 @@ def main():
                         help='Center frequency to record, in MHz')
     parser.add_argument("--tmp_path",dest='tmp_path', default=None,
                         help="Directory path to place temporary files (e.g. a ramdisk)" )
-    parser.add_argument("--out_path",dest='out_path',default='./data/',
+    parser.add_argument("--out_path",dest='out_path',default='../../baseband/sar-recordings/',
                         help="Directory path to place output files" )
-    parser.add_argument('--squelch_dbfs', dest='squelch_dbfs', type=float, default=-31.0,
+    parser.add_argument('--squelch_dbfs', dest='squelch_dbfs', type=float, default=-30.9,
                         help="In nonstop mode, the minimum recorded power to keep")
     args = parser.parse_args()
     duration_seconds = args.duration
@@ -152,7 +152,7 @@ def main():
                 SigMFFile.DATETIME_KEY: f'{basic_capture_start_utc}', # replace later
                 'stellanovat:if_gain_db': int(f'{if_lna_gain_db}'),
                 'stellanovat:bb_gain_db': int(f'{baseband_gain_db}'),
-                'stellanovat:sdr_rx_amp_enabled': 0,
+                'stellanovat:sdr_rx_amp_enabled': 1,
                 "stellanovat:recorder_command": f'{cmd_str_stem}',
                 "stellanovat:max_power_dbfs": 0
             }
@@ -171,14 +171,17 @@ def main():
     while True:
         le_datetime = datetime.utcnow()
         seg_start_time_utc = le_datetime.isoformat()+'Z'
-        compact_datetime_str = le_datetime.isoformat(sep='_',timespec='seconds')+'Z'
+        compact_datetime_str = le_datetime.isoformat(sep='_', timespec='seconds')+'Z'
         full_filename_stem = f'{base_filename_stem}_{compact_datetime_str}'
         # first we will write data to a temporary complex (I/Q) signed byte file
         tmp_data_file_path = f'{tmp_path}{full_filename_stem}.cs8'
         max_power, avg_power = capture_one_data_segment(cmd_str_stem, tmp_data_file_path)
-
-        print(f"max_power {max_power} > squelch {squelch_power_threshold} ?")
-        if max_power >= squelch_power_threshold:
+        keep_segment = False
+        relative_size = avg_power / max_power
+        if relative_size > 1.004 or max_power > squelch_power_threshold:
+            keep_segment = True
+        print(f"avg_power {avg_power} > squelch {squelch_power_threshold} ?  avg/max: {relative_size:0.4f}")
+        if keep_segment:
             # move the tmp data file to a more persistent location
             solid_data_file_path = f'{out_path}{full_filename_stem}.sigmf-data'
             print(f"moving {tmp_data_file_path} to {solid_data_file_path} ...")
