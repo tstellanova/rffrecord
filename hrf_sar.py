@@ -172,15 +172,18 @@ def main():
         le_datetime = datetime.utcnow()
         seg_start_time_utc = le_datetime.isoformat()+'Z'
         compact_datetime_str = le_datetime.isoformat(sep='_', timespec='seconds')+'Z'
-        full_filename_stem = f'{base_filename_stem}_{compact_datetime_str}'
+        # convert eg: '2024-09-15_04:28:13Z'  into: `20240915_042813Z`
+        more_compact_datetimestr = re.sub('\-|\:','', compact_datetime_str)
+        full_filename_stem = f'{base_filename_stem}_{more_compact_datetimestr}'
         # first we will write data to a temporary complex (I/Q) signed byte file
         tmp_data_file_path = f'{tmp_path}{full_filename_stem}.cs8'
         max_power, avg_power = capture_one_data_segment(cmd_str_stem, tmp_data_file_path)
+
         keep_segment = False
-        relative_size = avg_power / max_power
-        if relative_size > 1.004 or max_power > squelch_power_threshold:
+        power_above = max_power - avg_power  # for a legit signal, max power should well exceed average
+        if power_above > 3 or max_power > squelch_power_threshold:
             keep_segment = True
-        print(f"avg_power {avg_power} > squelch {squelch_power_threshold} ?  avg/max: {relative_size:0.4f}")
+        print(f"check avg_power {avg_power} > squelch {squelch_power_threshold} ||  peak > avg: {power_above:0.4f}")
         if keep_segment:
             # move the tmp data file to a more persistent location
             solid_data_file_path = f'{out_path}{full_filename_stem}.sigmf-data'
