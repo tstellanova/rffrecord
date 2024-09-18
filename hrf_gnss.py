@@ -28,17 +28,13 @@ def freq_ctr_and_bw(bandcode):
     :return: (center_freq_mhz, full_bandwidth_mhz, sampling_bandwidth_mhz, baseband_filter_mhz)
     """
     match bandcode:
-        case 'L2':
-            return 1227.6000, 11.000, 2.0, 2.0 # adequate for most L2 GPS uses?
-        case 'L2C':
+        case 'L2' | 'L2C' | 'L2CM':
             # The exact L2C chip rate is 1.023 Msps (2x 511.5 Ksps multiplexed)
             # "The CM code is 10,230 chips long, repeating every 20 ms.
             #  The CL code is 767,250 chips long, repeating every 1,500 ms.
             #  Each signal is transmitted at 511,500 chips per second (chip/s);
             # however, they are multiplexed together to form a 1,023,000-chip/s signal."
-            return 1227.6000, 11.000, 3.0, 2.5
-        case 'L2CM':
-            return 1227.6000, 11.000, 3.0, 2.5
+            return 1227.6000, 11.000, 4.0, 2.5
         case 'L3':
             return 1381.0500, 15.345, 2.0, 2.0
         case 'L4':
@@ -105,8 +101,10 @@ def band_gains(bandcode):
             return 40, 24
         case 'L1M':
             return 40, 20
-        case 'L2' | 'L2CM' | 'L5' | 'L5I' :
-            return 40, 32
+        case 'L2' | 'L2CM' | 'L2C' :
+            return 40, 16
+        case 'L5' | 'L5I' :
+            return 32, 24
         case 'KALX':
             return 40, 24
         case _:
@@ -166,7 +164,7 @@ def main():
     meta_out_path = f'{path_stem}_{file_number:04d}.sigmf-meta'
 
     # sample SN: 0000000000000000c66c63dc2d898983
-    opt_str = f"-f {ctr_freq_hz} -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B -r {data_out_path}"
+    opt_str = f"-f {ctr_freq_hz} -a 1 -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B -r {data_out_path}"
     if specific_hrf_sn is None:
         cmd_str = f"hackrf_transfer {opt_str}"
     else:
