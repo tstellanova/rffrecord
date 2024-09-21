@@ -59,7 +59,7 @@ def capture_one_data_segment(cmd_str_stem=None, data_out_path=None):
         print(f"hackrf_transfer failed with result code: {rc}")
     else:
         avg_power = total_power / float(step_count)
-        print(f"max_power: {max_power:02.3f} avg_power: {avg_power:02.3f} (dBFS)")
+        print(f"max_power: {max_power:0.3f} avg_power: {avg_power:0.3f} (dBFS)")
 
     return max_power, avg_power
 
@@ -181,9 +181,9 @@ def main():
 
         keep_segment = False
         power_above = max_power - avg_power  # for a legit signal, max power should well exceed average
-        if power_above > 3 or max_power > squelch_power_threshold:
+        if power_above > 2 or max_power > squelch_power_threshold:
             keep_segment = True
-        print(f"check avg_power {avg_power} > squelch {squelch_power_threshold} ||  peak > avg: {power_above:0.4f}")
+        print(f"check avg_power {avg_power:0.3} > squelch {squelch_power_threshold} ||  peak > avg: {power_above:0.3f}")
         if keep_segment:
             # move the tmp data file to a more persistent location
             solid_data_file_path = f'{out_path}{full_filename_stem}.sigmf-data'
