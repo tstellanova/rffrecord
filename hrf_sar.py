@@ -86,7 +86,7 @@ def main():
     tmp_path = out_path
     if args.tmp_path is not None:
         tmp_path = args.tmp_path
-    squelch_power_threshold = args.squelch_dbfs
+    peak_squelch_dbfs = args.squelch_dbfs
 
     if not os.path.isdir(out_path):
         print(f"out_path {out_path} does not exist")
@@ -168,6 +168,9 @@ def main():
         ]
     }
 
+    # minimum db above average for us to consider a peak as an interesting thing to record
+    min_peak_gap_dbfs = 1.5
+
     while True:
         le_datetime = datetime.utcnow()
         seg_start_time_utc = le_datetime.isoformat()+'Z'
@@ -178,12 +181,11 @@ def main():
         # first we will write data to a temporary complex (I/Q) signed byte file
         tmp_data_file_path = f'{tmp_path}{full_filename_stem}.cs8'
         max_power, avg_power = capture_one_data_segment(cmd_str_stem, tmp_data_file_path)
-
         keep_segment = False
-        power_above = max_power - avg_power  # for a legit signal, max power should well exceed average
-        if power_above > 2 or max_power > squelch_power_threshold:
+        power_delta = max_power - avg_power  # for a legit signal, max power should well exceed average
+        if (power_delta >= min_peak_gap_dbfs) or (max_power > peak_squelch_dbfs):
             keep_segment = True
-        print(f"check avg_power {avg_power:0.3} > squelch {squelch_power_threshold} ||  peak > avg: {power_above:0.3f}")
+        print(f"check peak > squelch: {max_power:0.2f} > {peak_squelch_dbfs} ||  (peak - avg) {power_delta:0.2f} > {min_peak_gap_dbfs} ")
         if keep_segment:
             # move the tmp data file to a more persistent location
             solid_data_file_path = f'{out_path}{full_filename_stem}.sigmf-data'
