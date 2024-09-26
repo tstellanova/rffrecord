@@ -17,7 +17,6 @@ from sigmf import SigMFFile
 
 
 def capture_one_data_segment(cmd_str_stem=None, data_out_path=None):
-
     # assumes that HackrF software version supports `-B` power reporting flag
     cmd_str = f"{cmd_str_stem} -r {data_out_path}"
 
@@ -35,9 +34,9 @@ def capture_one_data_segment(cmd_str_stem=None, data_out_path=None):
 
     with (Popen([cmd_str], stdout=PIPE, stderr=STDOUT, text=True, shell=True) as proc):
         for line in proc.stdout:
-            if line_count > 6: # skip command startup lines
+            if line_count > 6:  # skip command startup lines
                 if capture_start_utc is None:
-                    capture_start_utc = datetime.utcnow().isoformat()+'Z'
+                    capture_start_utc = datetime.utcnow().isoformat() + 'Z'
 
                 numeric_values = re.findall(regex, line)
                 if numeric_values is not None and len(numeric_values) == 7:
@@ -65,28 +64,32 @@ def capture_one_data_segment(cmd_str_stem=None, data_out_path=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Grab some SAR data using hackrf_transfer')
-    parser.add_argument('--duration', '-d',  type=int, default=15,
+    parser = argparse.ArgumentParser(description="""
+        Grab some SAR data using hackrf_transfer""")
+    parser.add_argument('--duration', '-d', type=int, default=15,
                         help='Duration to capture, in seconds')
-    parser.add_argument('--serial_num', '-sn',   default=None,
+    parser.add_argument('--serial_num', '-sn', default=None,
                         help='Specific HackRF serial number to use')
     parser.add_argument('--center_freq_mhz', '-fc', dest='fc_mhz', type=float, default=5405.5000,
                         help='Center frequency to record, in MHz')
-    parser.add_argument("--tmp_path",dest='tmp_path', default=None,
-                        help="Directory path to place temporary files (e.g. a ramdisk)" )
-    parser.add_argument("--out_path",dest='out_path',default='../../baseband/sar-recordings/',
-                        help="Directory path to place output files" )
-    parser.add_argument('--squelch_dbfs', dest='squelch_dbfs', type=float, default=-30.9,
+    parser.add_argument("--tmp_path", dest='tmp_path', default=None,
+                        help="Directory path to place temporary files (e.g. a ramdisk)")
+    parser.add_argument("--out_path", dest='out_path', default='../../baseband/sar-recordings/',
+                        help="Directory path to place output files")
+    parser.add_argument('--squelch_dbfs', dest='squelch_dbfs', type=float, default=-29.0,
                         help="In nonstop mode, the minimum recorded power to keep")
+    parser.add_argument('--delta_dbfs', dest='min_peak_gap_dbfs', type=float, default=1.1,
+                        help="Minimum peak dbFS above average for us to keep a recording")
     args = parser.parse_args()
     duration_seconds = args.duration
     specific_hrf_sn = args.serial_num
     freq_ctr_mhz = args.fc_mhz
+    peak_squelch_dbfs = args.squelch_dbfs
+    min_peak_gap_dbfs = args.min_peak_gap_dbfs
     out_path = args.out_path
     tmp_path = out_path
     if args.tmp_path is not None:
         tmp_path = args.tmp_path
-    peak_squelch_dbfs = args.squelch_dbfs
 
     if not os.path.isdir(out_path):
         print(f"out_path {out_path} does not exist")
@@ -96,10 +99,10 @@ def main():
         print(f"tmp_path {tmp_path} does not exist")
         return -1
 
-    sampling_bw_mhz = 20.0 # full bandwidth of HackRF
-    true_bb_bw_mhz = sampling_bw_mhz
+    sampling_bw_mhz = 20.0  # full bandwidth of HackRF
 
     print(f"Ctr Freq: {freq_ctr_mhz} MHz | BW : {sampling_bw_mhz} MHz | duration: {duration_seconds} s")
+    print(f"Squelch: {peak_squelch_dbfs} dbFS | Peak Delta : {min_peak_gap_dbfs} dbFS")
 
     sample_rate_hz = int(sampling_bw_mhz * 1E6)
     ctr_freq_hz = int(freq_ctr_mhz * 1E6)
@@ -107,7 +110,7 @@ def main():
     baseband_filter_bw_hz = sample_rate_hz
 
     # These are based on testing with some antenna and LNA combos -- YMMV
-    if_lna_gain_db, baseband_gain_db = 40, 20
+    if_lna_gain_db, baseband_gain_db = 40, 24
 
     n_samples = int(duration_seconds * sample_rate_hz)
 
@@ -117,8 +120,6 @@ def main():
     freq_upper_edge = int(ctr_freq_hz + half_baseband_bandwidth)
 
     base_filename_stem = f'hrf_sar_{int(freq_ctr_mhz)}_{duration_seconds}s'
-    # tmp_data_file_path = f'{tmp_path}{base_filename_stem}'
-    # path_stem = f'{out_path}hrf_sar_{int(freq_ctr_mhz)}_{duration_seconds}s'
 
     # assumes that HackrF software version supports `-B` power reporting flag
     opt_str = f"-f {ctr_freq_hz} -a 1 -l {if_lna_gain_db} -g {baseband_gain_db} -b {baseband_filter_bw_hz} -s {sample_rate_hz} -n {n_samples}  -B "
@@ -127,7 +128,7 @@ def main():
     else:
         cmd_str_stem = f"hackrf_transfer -d {specific_hrf_sn} {opt_str}"
 
-    basic_capture_start_utc = datetime.utcnow().isoformat()+'Z'
+    basic_capture_start_utc = datetime.utcnow().isoformat() + 'Z'
 
     # TODO look at using the SigMFFile object, directly, instead
     meta_info_dict = {
@@ -149,7 +150,7 @@ def main():
             {
                 SigMFFile.START_INDEX_KEY: 0,
                 SigMFFile.FREQUENCY_KEY: int(f'{ctr_freq_hz}'),
-                SigMFFile.DATETIME_KEY: f'{basic_capture_start_utc}', # replace later
+                SigMFFile.DATETIME_KEY: f'{basic_capture_start_utc}',  # replace later
                 'stellanovat:if_gain_db': int(f'{if_lna_gain_db}'),
                 'stellanovat:bb_gain_db': int(f'{baseband_gain_db}'),
                 'stellanovat:sdr_rx_amp_enabled': 1,
@@ -168,15 +169,12 @@ def main():
         ]
     }
 
-    # minimum db above average for us to consider a peak as an interesting thing to record
-    min_peak_gap_dbfs = 1.5
-
     while True:
         le_datetime = datetime.utcnow()
-        seg_start_time_utc = le_datetime.isoformat()+'Z'
-        compact_datetime_str = le_datetime.isoformat(sep='_', timespec='seconds')+'Z'
+        seg_start_time_utc = le_datetime.isoformat() + 'Z'
+        compact_datetime_str = le_datetime.isoformat(sep='_', timespec='seconds') + 'Z'
         # convert eg: '2024-09-15_04:28:13Z'  into: `20240915_042813Z`
-        more_compact_datetimestr = re.sub('\-|\:','', compact_datetime_str)
+        more_compact_datetimestr = re.sub('\-|\:', '', compact_datetime_str)
         full_filename_stem = f'{base_filename_stem}_{more_compact_datetimestr}'
         # first we will write data to a temporary complex (I/Q) signed byte file
         tmp_data_file_path = f'{tmp_path}{full_filename_stem}.cs8'
@@ -185,7 +183,8 @@ def main():
         power_delta = max_power - avg_power  # for a legit signal, max power should well exceed average
         if (power_delta >= min_peak_gap_dbfs) or (max_power > peak_squelch_dbfs):
             keep_segment = True
-        print(f"check peak > squelch: {max_power:0.2f} > {peak_squelch_dbfs} ||  (peak - avg) {power_delta:0.2f} > {min_peak_gap_dbfs} ")
+        print(
+            f"check (peak > squelch): {max_power:0.2f} > {peak_squelch_dbfs} or (peak - avg) {power_delta:0.2f} > {min_peak_gap_dbfs} ")
         if keep_segment:
             # move the tmp data file to a more persistent location
             solid_data_file_path = f'{out_path}{full_filename_stem}.sigmf-data'
@@ -209,7 +208,6 @@ def main():
             # remove the data file that did not meet squelch standard
             print(f"deleting {tmp_data_file_path} ...")
             os.remove(tmp_data_file_path)
-
 
 
 if __name__ == "__main__":
