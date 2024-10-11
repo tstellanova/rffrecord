@@ -35,6 +35,8 @@ def freq_ctr_and_bw(bandcode):
             #  Each signal is transmitted at 511,500 chips per second (chip/s);
             # however, they are multiplexed together to form a 1,023,000-chip/s signal."
             return 1227.6000, 11.000, 4.0, 2.5
+        case 'L2M':
+            return 1227.6000, 20.460, 20.00, 20.00 
         case 'L3':
             return 1381.0500, 15.345, 2.0, 2.0
         case 'L4':
@@ -101,8 +103,8 @@ def band_gains(bandcode):
             return 40, 24
         case 'L1M':
             return 40, 20
-        case 'L2' | 'L2CM' | 'L2C' :
-            return 40, 16
+        case 'L2' | 'L2CM' | 'L2C' | 'L2M' :
+            return 32, 16
         case 'L5' | 'L5I' :
             return 32, 24
         case 'KALX':
@@ -114,7 +116,7 @@ def main():
     parser = argparse.ArgumentParser(description='Grab some GNSS data using hackrf_transfer')
     parser.add_argument('--band', '-b', dest='bandcode', default='L1',
                         choices=['L1', 'L2', 'L3', 'L4', 'L5',
-                                 'L1CA','L1M', 'L2C', 'L2CM', 'L5I',
+                                 'L1CA','L1M', 'L2C', 'L2CM','L2M', 'L5I',
                                  'B2a', 'B2c', 'B3',
                                  'E1', 'E5a', 'E5b', 'E6',
                                  'H1','KALX', 'V1', 'RCM',
